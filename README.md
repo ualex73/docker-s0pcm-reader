@@ -5,6 +5,8 @@ This is the Docker setup for the S0PCM-Reader application. This small Python app
 
 I myself use it to count my water meter usage.
 
+Docker Link: https://hub.docker.com/r/ualex73/s0pcm-reader/
+
 Pulse vs liter vs m3
 --------------------
 I use the S0PCM-Reader to measure my water meter and normally in the Netherlands the water usage is measurement in m3 and not in liters. Only this S0PCM-Reader isn't really aware of liters vs m3, because it counts the pulses. So it is important for you to check how your e.g. water meter is counting the usage, my Itron water meter send 1 pulse per liter of water. This then means the 'measurement.yaml' file, which stores the total and daily counters, all should be in liters and not in m3.
