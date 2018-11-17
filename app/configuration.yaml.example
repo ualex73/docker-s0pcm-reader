@@ -1,0 +1,30 @@
+
+# The logging level of s0pcm-reader, allowed values are: critical, error, warning, info and debug. Default is warning
+log:
+  level: warning
+  #size: 10
+  #count: 3
+
+# MQTT Settings
+mqtt:
+  host: 192.168.1.1
+  port: 1883
+  basetopic: s0pcmreader
+  #username: s0pcmreader
+  #password: password
+  #client_id: <random>
+  #retain: yes
+  #connect_retry: 5
+  #publish_interval: 10
+  #publish_onchange: yes
+
+# SerialPort Settings
+serial:
+  port: /dev/ttyACM0
+  #baudrate: 9600
+  #parity:
+  #stopbits:
+  #bytesize: 7
+  #timeout: None
+  #connect_retry: 5
+

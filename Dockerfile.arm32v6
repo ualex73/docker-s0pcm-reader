@@ -1,0 +1,17 @@
+FROM arm32v6/python:alpine
+
+MAINTAINER "Alex <ualex73@gmail.com>"
+
+# Setup cross-build
+ENV QEMU_EXECVE 1
+COPY qemu/qemu-arm-static /usr/bin
+
+WORKDIR /usr/src/app
+
+COPY app/* ./
+
+RUN ["/usr/bin/qemu-arm-static", "/bin/sh", "-c", \
+     "pip install --no-cache-dir -r requirements.txt && \
+      mkdir /config"]
+
+CMD [ "/bin/sh", "./run.sh" ]
