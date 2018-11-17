@@ -64,7 +64,10 @@ Configuration
 -------------
 ```
 # The logging level of s0pcm-reader, allowed values are: critical, error, warning, info and debug. Default is info
-#log_level: info
+#log:
+#  level: info
+#  size: 10
+#  count: 3
 
 # MQTT Settings
 mqtt:

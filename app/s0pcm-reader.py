@@ -137,7 +137,7 @@ def ReadConfig():
            config['log']['level'] != 'INFO' and \
            config['log']['level'] != 'DEBUG':
             print('WARN: Invalid \'level\' ' + config['log']['level'] + ' supplied. Only \'critical\', \'error\', \'warning\', \'info\' and \'debug\' are supported. Using \'warning\' now.')
-            config['log']['level'] = 'DEBUG'
+            config['log']['level'] = 'WARNING'
     else:
         # Setup loglevel, default is 'warning'
         config['log']['level'] = 'WARNING'
