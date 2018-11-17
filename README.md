@@ -1,7 +1,7 @@
 S0PCM-Reader
 ============
 
-This is the Docker files for the S0PCM-Reader application. This small Python application reads the pulse counters of a S0PCM-2 or S0PCM-5 and send the total and daily counters via MQTT to your favorite domotica application like Home Assistant. The S0PCM-2 or 5 are the S0 Pulse Counter Module sold by http://www.smartmeterdashboard.nl
+This is the Docker setup for the S0PCM-Reader application. This small Python application reads the pulse counters of a S0PCM-2 or S0PCM-5 and send the total and daily counters via MQTT to your favorite domotica application like Home Assistant. The S0PCM-2 or 5 are the S0 Pulse Counter Module sold by http://www.smartmeterdashboard.nl
 
 I myself use it to count my water meter usage.
 
@@ -11,11 +11,23 @@ I use the S0PCM-Reader to measure my water meter and normally in the Netherlands
 
 The conversion from m3 to liter is easy, because you can just multiple it by 1000. E.g. 770.123 m3 is 770123 liter.
 
-<image of a water meter, showing m3>
+![alt text](https://raw.githubusercontent.com/ualex73/docker-s0pcm-reader/master/screenshots/water-meter.png "Water meter")
+
+Configure your initial meter reader
+-----------------------------------
+After you have downloaded and started the S0PCM-Reader, you need to configure your total pulse count to allow the S0PCM-Reader to relay the correct total count. Follow the following procedure:
+- Stop the S0PCM-Reader container
+- Open the '<config>/measurement.yaml' file
+- Check which input you use, e.g. for input 'M1' modify the following:
+```
+1:
+  total: 370689
+```
+- Save the file
+- Start the S0PCM-Reader container
 
 S0PCM
 -----
-
 The following S0PCM (ascii) protocol is used by this S0PCM-Reader, a simple S0PCM telegram:
 ```
 Header record (once, after start-up):
@@ -50,7 +62,6 @@ If you own a different type of S0PCM device, which you like to have supported, p
 
 Configuration
 -------------
-
 ```
 # The logging level of s0pcm-reader, allowed values are: critical, error, warning, info and debug. Default is info
 #log_level: info
@@ -81,7 +92,6 @@ serial:
 
 Meassurements
 -------------
-
 ```
 date: 2018-11-15
 1:
@@ -109,12 +119,10 @@ date: 2018-11-15
 
 Volumes
 -------
-
 `/config`
 
 Run
 ---
-
 Launch the S0PCM-Reader docker container with the following command:
 
 ```
