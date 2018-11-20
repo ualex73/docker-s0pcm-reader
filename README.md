@@ -19,7 +19,7 @@ Configure your initial meter reader
 -----------------------------------
 After you have downloaded and started the S0PCM-Reader, you need to configure your total pulse count to allow the S0PCM-Reader to relay the correct total count. Follow the following procedure:
 - Stop the S0PCM-Reader container
-- Open the '<config>/measurement.yaml' file
+- Open the `<config>/measurement.yaml` file
 - Check which input you use, e.g. for input 'M1' modify the following:
 ```
 1:
