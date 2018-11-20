@@ -34,11 +34,14 @@ The totals and day counters will be published with the following topics:
 
 ```
 <basetopic>/1/total
-<basetopic>/1/day
+<basetopic>/1/today
+<basetopic>/1/yesterday
 <basetopic>/2/total
-<basetopic>/2/day
+<basetopic>/2/today
+<basetopic>/2/yesterday
 <basetopic>/X/total
-<basetopic>/X/day
+<basetopic>/X/today
+<basetopic>/X/yesterday
 ```
 The `<basetopic>` you can configure in the `mqtt` section of the configuration file, the default is 's0pcm-reader'. The `X` is the input number, the name is configurable in the measurement file.
 
