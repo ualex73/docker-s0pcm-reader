@@ -15,8 +15,9 @@ mqtt:
   #client_id: <random>
   #retain: yes
   #connect_retry: 5
-  #publish_interval: 10
-  #publish_onchange: yes
+  #tls: yes
+  #tls_ca: CA.pem
+  #tls_check_peer: yes
 
 # SerialPort Settings
 serial:
@@ -27,4 +28,14 @@ serial:
   #bytesize: 7
   #timeout: None
   #connect_retry: 5
+
+s0pcm:
+  #publish_interval: 10
+  #publish_onchange: yes
+  #include:
+  #  - 1
+  #  - 2
+  #dailystat:
+  #  - 1
+  #  - 2
 

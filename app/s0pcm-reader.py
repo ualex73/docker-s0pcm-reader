@@ -8,8 +8,8 @@ import yaml
 import logging
 from logging.handlers import RotatingFileHandler
 import paho.mqtt.client as mqtt
+import ssl
 import argparse
-import traceback
 import copy
 
 """
@@ -64,10 +64,12 @@ MQTT
 MQTT Topic:
 base_topic/status - online/offline
 base_topic/error - if any?
-base_topic/1/day
 base_topic/1/total
-base_topic/X/day
+base_topic/1/today
+base_topic/1/yesterday
 base_topic/X/total
+base_topic/X/today
+base_topic/X/yesterday
 
 """
 
@@ -159,10 +161,24 @@ def ReadConfig():
     if not 'password' in config['mqtt']: config['mqtt']['password'] = None
     if not 'base_topic' in config['mqtt']: config['mqtt']['base_topic'] = 's0pcm-reader'
     if not 'client_id' in config['mqtt']: config['mqtt']['client_id'] = None
+    if not 'version' in config['mqtt']: config['mqtt']['version'] = mqtt.MQTTv311
     if not 'retain' in config['mqtt']: config['mqtt']['retain'] = True
     if not 'connect_retry' in config['mqtt']: config['mqtt']['connect_retry'] = 5
-    if not 'publish_interval' in config['mqtt']: config['mqtt']['publish_interval'] = None
-    if not 'publish_onchange' in config['mqtt']: config['mqtt']['publish_onchange'] = True
+
+    if str(config['mqtt']['version']) == '3.1':
+      config['mqtt']['version'] = mqtt.MQTTv31
+    else:
+      config['mqtt']['version'] = mqtt.MQTTv311
+ 
+    # TLS configuration
+    if not 'tls' in config['mqtt']: config['mqtt']['tls'] = False
+    if not 'tls_ca' in config['mqtt']: config['mqtt']['tls_ca'] = ''
+    if not 'tls_check_peer' in config['mqtt']: config['mqtt']['tls_check_peer'] = True
+
+    # Append the configuration path if no '/' is in front of the CA file
+    if config['mqtt']['tls_ca'] != '':
+        if not config['mqtt']['tls_ca'].startswith('/'):
+            config['mqtt']['tls_ca'] = configdirectory + config['mqtt']['tls_ca']
 
     # Setup 'serial' variables if not existing
     if not 'serial' in config: config['serial'] = {}
@@ -173,6 +189,15 @@ def ReadConfig():
     if not 'bytesize' in config['serial']: config['serial']['bytesize'] = serial.SEVENBITS
     if not 'timeout' in config['serial']: config['serial']['timeout'] = None
     if not 'connect_retry' in config['serial']: config['serial']['connect_retry'] = 5
+
+    # Setup 's0pcm'
+    if not 's0pcm' in config: config['s0pcm'] = {}
+    if not 'include' in config['s0pcm']: config['s0pcm']['include'] = None
+    if not 'dailystat' in config['s0pcm']: config['s0pcm']['dailystat'] = None
+    if not 'publish_interval' in config['s0pcm']: config['s0pcm']['publish_interval'] = None
+    if not 'publish_onchange' in config['s0pcm']: config['s0pcm']['publish_onchange'] = True
+
+    logger.debug('Start: s0pcm-reader')
     
     logger.debug('Config: %s', str(config))
 
@@ -211,16 +236,16 @@ class TaskReadSerial(threading.Thread):
 
     def __init__(self, trigger, stopper):
         super().__init__()
-        self.trigger = trigger
-        self.stopper = stopper
+        self._trigger = trigger
+        self._stopper = stopper
 
-        self.serialerror = 0
+        self._serialerror = 0
 
     def ReadSerial(self):
 
         global measurementshare
 
-        while not self.stopper.is_set():
+        while not self._stopper.is_set():
 
             logger.debug('Opening serialport \'%s\'', config['serial']['port'])
 
@@ -231,16 +256,16 @@ class TaskReadSerial(threading.Thread):
                                     stopbits=config['serial']['stopbits'],
                                     bytesize=config['serial']['bytesize'],
                                     timeout=config['serial']['timeout'])
-                self.serialerror = 0
+                self._serialerror = 0
             except Exception as e:
-                self.serialerror += 1
+                self._serialerror += 1
                 logger.error('Serialport connection failed. %s: \'%s\'', type(e).__name__, str(e))
                 logger.error('Retry in %d seconds', config['serial']['connect_retry'])
                 time.sleep(config['serial']['connect_retry'])
                 continue
 
             # Only do a read of the data when the port is opened succesfully
-            while not self.stopper.is_set():
+            while not self._stopper.is_set():
 
                 try:
                     datain = ser.readline()
@@ -274,14 +299,13 @@ class TaskReadSerial(threading.Thread):
 
                     # s0pcm-5 - 19
                     if len(s0arr) == 19:
-                        size = 5
-                        #  0    1 2  3  4 5 6  7 8 9 101112 131415 161718
                         # ID:8237:I:10:M1:0:0:M2:0:0:M3:0:0:M4:0:0:M5:0:0
- 
+                        size = 5
+
                     # s0pcm-2 - 10
                     elif len(s0arr) == 10: 
-                        size = 2
                         # ID:8237:I:10:M1:0:0:M2:0:0
+                        size = 2
 
                     else:
                         logger.error('Packet has invalid length. Excepted 10 or 19, got %d.', len(s0arr))
@@ -307,11 +331,27 @@ class TaskReadSerial(threading.Thread):
                             if not 'pulsecount' in measurement[count]: measurement[count]['pulsecount'] = 0
                             if not 'total' in measurement[count]: measurement[count]['total'] = 0
                             if not 'today' in measurement[count]: measurement[count]['today'] = 0
+                            if not 'yesterday' in measurement[count]: measurement[count]['yesterday'] = 0
                             
                             # We got a date change
                             if str(measurement['date']) != str(datetime.date.today()):
-                                logger.debug('Day changed from \'%s\' to \'%s\', resetting today counter \'%d\' to 0', str(measurement['date']), str(datetime.date.today()), count)
+                                logger.debug('Day changed from \'%s\' to \'%s\', resetting today counter \'%d\' to \'0\'. Yesterday counter is \'%d\'', str(measurement['date']), str(datetime.date.today()), count, measurement[count]['today'])
+                                measurement[count]['yesterday'] = measurement[count]['today']
                                 measurement[count]['today'] = 0
+
+                                # Write the counters to a text file if required
+                                todayfile = False
+                                if config['s0pcm']['dailystat'] != None:
+                                    if key in config['s0pcm']['dailystat']:
+                                        todayfile = True
+
+                                if todayfile == True:
+                                    try:
+                                        fstat = open(configdirectory + 'daily-' + str(count) + '.txt', 'a')
+                                        fstat.write(str(measurement['date']) + ';' + str(measurement[count]['yesterday']) + '\n')
+                                        fstat.close()
+                                    except Exception as e:
+                                        logger.error('Stats file \'%s\' write/create failed. %s: \'%s\'', configdirectory + 'daily-' + str(count) + '.txt', type(e).__name__, str(e))
                             
                             if pulsecount > measurement[count]['pulsecount']:
 
@@ -352,7 +392,7 @@ class TaskReadSerial(threading.Thread):
                     lock.release()
 
                     # Trigger that new data is available for MQTT
-                    self.trigger.set()
+                    self._trigger.set()
 
                 elif datastr == '':
                     logger.warning('Empty Packer received, this can happen during start-up')
@@ -362,9 +402,10 @@ class TaskReadSerial(threading.Thread):
     def run(self):
         try:
             self.ReadSerial()
-        except Exception:
-            self.stopper.set()
-            logging.error(traceback.format_exc())
+        except:
+            logger.error('Fatal exception has occured', exc_info=True)
+        finally:
+            self._stopper.set()
 
 # ------------------------------------------------------------------------------------
 # Task to do MQTT Publish
@@ -374,19 +415,20 @@ class TaskDoMQTT(threading.Thread):
 
     def __init__(self, trigger, stopper):
         super().__init__()
-        self.trigger = trigger
-        self.stopper = stopper
-        self.connected = False
+        self._trigger = trigger
+        self._stopper = stopper
+        self._connected = False
 
     def on_connect(self, mqttc, obj, flags, rc):
         if rc == 0:
+            self._connected = True
             logger.debug('MQTT successfully connected to broker')
-            self.connected = True
+            self._mqttc.publish(config['mqtt']['base_topic'] + '/status', 'online', retain=config['mqtt']['retain'])
         else:
-            self.connected = False
+            self._connected = False
 
     def on_disconnect(self, mqttc, userdata, rc):
-        self.connected = False
+        self._connected = False
         if rc == 0:
             logger.debug('MQTT successfully disconnected to broker')
         else:
@@ -409,25 +451,45 @@ class TaskDoMQTT(threading.Thread):
         global measurementshare
         measurementprevious = {}
 
+        # Copy the measurements to previous one, preventing send values when on change is enabled
+        measurementprevious = measurement
+
         # Define our MQTT Client
-        self.mqttc = mqtt.Client()
-        self.mqttc.on_connect = self.on_connect
-        self.mqttc.on_disconnect = self.on_disconnect
-        #self.mqttc.on_message = self.on_message
-        #self.mqttc.on_publish = self.on_publish
-        #self.mqttc.on_subscribe = self.on_subscribe
+        self._mqttc = mqtt.Client(client_id=config['mqtt']['client_id'], protocol=config['mqtt']['version'])
+        self._mqttc.on_connect = self.on_connect
+        self._mqttc.on_disconnect = self.on_disconnect
+        #self._mqttc.on_message = self.on_message
+        #self._mqttc.on_publish = self.on_publish
+        #self._mqttc.on_subscribe = self.on_subscribe
 
         # https://github.com/eclipse/paho.mqtt.python/blob/master/examples/client_pub-wait.py
 
         if config['mqtt']['username'] != None:
-            self.mqttc.username_pw_set(config['mqtt']['username'], config['mqtt']['password'])
+            self._mqttc.username_pw_set(config['mqtt']['username'], config['mqtt']['password'])
 
-        while not self.stopper.is_set():
+        # Setup TLS if requested
+        if config['mqtt']['tls']:
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS)
+
+            if config['mqtt']['tls_ca'] == '':
+                context.verify_mode = ssl.CERT_NONE
+                context.check_hostname = False
+            else:
+                context.verify_mode = ssl.CERT_REQUIRED
+                context.load_verify_locations(cafile=config['mqtt']['tls_ca'])
+                context.check_hostname = config['mqtt']['tls_check_peer']
+
+            self._mqttc.tls_set_context(context=context)
+
+        # Set last will
+        self._mqttc.will_set(config['mqtt']['base_topic'] + '/status', 'offline', retain=config['mqtt']['retain'])
+
+        while not self._stopper.is_set():
 
             logger.debug('Connecting to MQTT Broker \'%s:%s\'', config['mqtt']['host'], str(config['mqtt']['port']))
 
             try:
-                self.mqttc.connect(config['mqtt']['host'], config['mqtt']['port'], 60)
+                self._mqttc.connect(config['mqtt']['host'], config['mqtt']['port'], 60)
             except Exception as e:
                 logger.error('MQTT connection failed. %s: \'%s\'', type(e).__name__, str(e))
                 logger.error('Retry in %d seconds', config['mqtt']['connect_retry'])
@@ -435,19 +497,19 @@ class TaskDoMQTT(threading.Thread):
                 continue
 
             #connect_async(host, port=1883, keepalive=60, bind_address="")
-            self.mqttc.loop_start()
+            self._mqttc.loop_start()
 
             # Let's wait 1 second, otherwise we can be too fast?
             time.sleep(1)
 
-            while not self.stopper.is_set():
+            while not self._stopper.is_set():
                 #Do our publish here with information we get from other Thread
 
                 # If no interval is defined, we wait on an event from the other thread
                 # We need to clear it (directly), otherwise it will run at  100% cpu
-                if config['mqtt']['publish_interval'] == None:
-                    self.trigger.wait()
-                    self.trigger.clear()
+                if config['s0pcm']['publish_interval'] == None:
+                    self._trigger.wait()
+                    self._trigger.clear()
 
                 # Do some lock/release on global variables
                 lock.acquire()
@@ -455,10 +517,10 @@ class TaskDoMQTT(threading.Thread):
                 lock.release()
 
                 # Check if we are connected
-                if self.connected == False:
+                if self._connected == False:
                     logger.debug('Not connected to MQTT Broker')
-                    if config['mqtt']['publish_interval'] != None:
-                        time.sleep(config['mqtt']['publish_interval'])
+                    if config['s0pcm']['publish_interval'] != None:
+                        time.sleep(config['s0pcm']['publish_interval'])
                     continue
 
                 for key in measurementlocal:
@@ -469,12 +531,18 @@ class TaskDoMQTT(threading.Thread):
                         except:
                             pass
 
+                        # Skip an input if not configured
+                        if config['s0pcm']['include'] != None:
+                            if not key in config['s0pcm']['include']:
+                                logger.debug('MQTT Publish for input \'%d\' is disabled', key)
+                                continue
+
                         try:
                             instancename = measurementlocal[key]['name']
                         except:
                             instancename = str(key)
 
-                        for subkey in ['total', 'today']:
+                        for subkey in ['total', 'today', 'yesterday']:
 
                             # Try to assign the previous value, if this fails, we set it "-1" then it should always be different
                             try:
@@ -485,31 +553,38 @@ class TaskDoMQTT(threading.Thread):
                             try:
                                 if subkey in measurementlocal[key]:
                                     # Check if the value not changed and publish on change is off
-                                    if measurementlocal[key][subkey] == value_previous and config['mqtt']['publish_onchange'] == True:
+                                    if measurementlocal[key][subkey] == value_previous and config['s0pcm']['publish_onchange'] == True:
                                         continue
-                                    
+
                                     logger.debug('MQTT Publish of topic \'%s\' and value \'%s\'',config['mqtt']['base_topic'] + '/' + instancename + '/' + subkey,str(measurementlocal[key][subkey]))
 
                                     # Do a MQTT Publish
-                                    self.mqttc.publish(config['mqtt']['base_topic'] + '/' + instancename + '/' + subkey, measurementlocal[key][subkey], retain=config['mqtt']['retain'])
-                            except:
+                                    self._mqttc.publish(config['mqtt']['base_topic'] + '/' + instancename + '/' + subkey, measurementlocal[key][subkey], retain=config['mqtt']['retain'])
+                            except Exception as e:
                                 logger.error('MQTT Publish Failed. Key=%s, SubKey=%s. %s: \'%s\'', str(key), subkey, type(e).__name__, str(e))
 
                 # Lets make also a copy of this one, then we can compare if there is a delta
                 measurementprevious = copy.deepcopy(measurementlocal)
 
                 # Now sleep according to publish interval
-                if config['mqtt']['publish_interval'] != None:
-                    time.sleep(config['mqtt']['publish_interval'])
+                if config['s0pcm']['publish_interval'] != None:
+                    time.sleep(config['s0pcm']['publish_interval'])
 
-            self.mqttc.loop_stop()
+            self._mqttc.loop_stop()
+
+            # Send an official offline message
+            if self._connected:
+                self._mqttc.publish(config['mqtt']['base_topic'] + '/status', 'offline', retain=config['mqtt']['retain'])
+
+            self._mqttc.disconnect()
 
     def run(self):
         try:
             self.DoMQTT()
-        except Exception:
-            self.stopper.set()
-            logging.error(traceback.format_exc())
+        except:
+            logger.error('Fatal exception has occured', exc_info=True)
+        finally:
+            self._stopper.set()
 
 # ------------------------------------------------------------------------------------
 # Main
@@ -532,5 +607,7 @@ t2.start()
 # Now wait until both tasks are finished
 t1.join()
 t2.join()
+
+logger.debug('Stop: s0pcm-reader')
 
 # End

@@ -28,6 +28,20 @@ After you have downloaded and started the S0PCM-Reader, you need to configure yo
 - Save the file
 - Start the S0PCM-Reader container
 
+MQTT Message
+------------
+The totals and day counters will be published with the following topics:
+
+```
+<basetopic>/1/total
+<basetopic>/1/day
+<basetopic>/2/total
+<basetopic>/2/day
+<basetopic>/X/total
+<basetopic>/X/day
+```
+The `<basetopic>` you can configure in the `mqtt` section of the configuration file, the default is 's0pcm-reader'. The `X` is the input number, the name is configurable in the measurement file.
+
 S0PCM
 -----
 The following S0PCM (ascii) protocol is used by this S0PCM-Reader, a simple S0PCM telegram:
