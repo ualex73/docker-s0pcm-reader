@@ -98,8 +98,6 @@ mqtt:
   #client_id: <random>
   #retain: yes
   #connect_retry: 5
-  #publish_interval: 10
-  #publish_onchange: yes
 
 # SerialPort Settings
 serial:
@@ -110,6 +108,10 @@ serial:
   #bytesize: 7
   #timeout: None
   #connect_retry: 5
+
+s0pcm:
+  #publish_interval: 10
+  #publish_onchange: yes
 ```
 
 Meassurements
@@ -118,22 +120,27 @@ Meassurements
 date: 2018-11-15
 1:
   #name: channel1
+  yesterday: 0
   pulsecount: 2
   today: 2
   total: 370689
 2:
+  yesterday: 0
   pulsecount: 0
   today: 0
   total: 0
 3:
+  yesterday: 0
   pulsecount: 0
   today: 0
   total: 0
 4:
+  yesterday: 0
   pulsecount: 0
   today: 0
   total: 0
 5:
+  yesterday: 0
   pulsecount: 0
   today: 0
   total: 0
