@@ -154,7 +154,11 @@ def ReadConfig():
     logger.addHandler(handler)
 
     # Setup 'mqtt' variables if not existing
-    if not 'mqtt' in config: config['mqtt'] = {}
+    if 'mqtt' in config:
+        if config['mqtt'] == None:
+            config['mqtt'] = {}
+    else:
+        config['mqtt'] = {}
     if not 'host' in config['mqtt']: config['mqtt']['host'] = '127.0.0.1'
     if not 'port' in config['mqtt']: config['mqtt']['port'] = 1883
     if not 'username' in config['mqtt']: config['mqtt']['username'] = None
@@ -181,7 +185,11 @@ def ReadConfig():
             config['mqtt']['tls_ca'] = configdirectory + config['mqtt']['tls_ca']
 
     # Setup 'serial' variables if not existing
-    if not 'serial' in config: config['serial'] = {}
+    if 'serial' in config:
+        if config['serial'] == None:
+            config['serial'] = {}
+    else:
+        config['serial'] = {}
     if not 'port' in config['serial']: config['serial']['port'] = '/dev/ttyACM0'
     if not 'baudrate' in config['serial']: config['serial']['baudrate'] = 9600
     if not 'parity' in config['serial']: config['serial']['parity'] = serial.PARITY_EVEN
@@ -191,7 +199,11 @@ def ReadConfig():
     if not 'connect_retry' in config['serial']: config['serial']['connect_retry'] = 5
 
     # Setup 's0pcm'
-    if not 's0pcm' in config: config['s0pcm'] = {}
+    if 's0pcm' in config:
+        if config['s0pcm'] == None:
+            config['s0pcm'] = {}
+    else:
+        config['s0pcm'] = {}
     if not 'include' in config['s0pcm']: config['s0pcm']['include'] = None
     if not 'dailystat' in config['s0pcm']: config['s0pcm']['dailystat'] = None
     if not 'publish_interval' in config['s0pcm']: config['s0pcm']['publish_interval'] = None
@@ -342,7 +354,7 @@ class TaskReadSerial(threading.Thread):
                                 # Write the counters to a text file if required
                                 todayfile = False
                                 if config['s0pcm']['dailystat'] != None:
-                                    if key in config['s0pcm']['dailystat']:
+                                    if count in config['s0pcm']['dailystat']:
                                         todayfile = True
 
                                 if todayfile == True:
@@ -589,9 +601,14 @@ class TaskDoMQTT(threading.Thread):
 # ------------------------------------------------------------------------------------
 # Main
 # ------------------------------------------------------------------------------------
-ReadConfig()
 
-ReadMeasurement()
+try:
+    ReadConfig()
+    ReadMeasurement()
+except:
+    logger.error('Fatal exception has occured', exc_info=True)
+    # we need to quit, because we detected an error
+    exit(1)
 
 trigger = threading.Event()
 stopper = threading.Event()
