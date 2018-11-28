@@ -118,7 +118,8 @@ mqtt:
   #tls_ca: CA.pem
   # Default we check if the hostname/IP returned matches our certificate.
   #tls_check_peer: yes
-  # Retry interval in seconds, if a connection to the MQTT broker fails. If an IP address is not reachable, it could take longer to reconnect.
+  # Retry interval in seconds, if a connection to the MQTT broker fails.
+  # If an IP address is not reachable, it could take longer to reconnect.
   #connect_retry: 5
 
 # ###################
