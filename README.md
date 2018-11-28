@@ -82,26 +82,52 @@ If you own a different type of S0PCM device, which you like to have supported, p
 Configuration
 -------------
 ```
-# The logging level of s0pcm-reader, allowed values are: critical, error, warning, info and debug. Default is info
-#log:
-#  level: info
-#  size: 10
-#  count: 3
+# #######
+# Logging
+# #######
+log:
+  # loglevel to use. Supported are critical, error, warning, info and debug. Default is warning.
+  level: warning
+  # The size in MB of a logfile. Default is 10 (MB).
+  #size: 10
+  # The number of logfiles which should be kept. Default is 3.
+  #count: 3
 
+# #############
 # MQTT Settings
+# #############
 mqtt:
+  # Hostname or IP of the MQTT broker
   host: 192.168.1.1
+  # Port of the MQTT broker. Normally 1883 or 8883 (TLS)
   port: 1883
+  # Basictopic to use to publish the values
   basetopic: s0pcmreader
+  # Username and password required to connect to the MQTT broker
   #username: s0pcmreader
   #password: password
+  # If a client id should be used, if not configured - a random value will be used
   #client_id: <random>
+  # If messages should have the retain flag. Default it is yes.
   #retain: yes
+
+  # TLSv1/1.1/1.2 Configuration
+  # Enable TLS, without a "tls_ca" it still connects, but no certificate verification is done.
+  #tls: yes
+  # Optional certificate to check against.
+  #tls_ca: CA.pem
+  # Default we check if the hostname/IP returned matches our certificate.
+  #tls_check_peer: yes
+  # Retry interval in seconds, if a connection to the MQTT broker fails. If an IP address is not reachable, it could take longer to reconnect.
   #connect_retry: 5
 
+# ###################
 # SerialPort Settings
+# ###################
 serial:
+  # the serialport to which the pulse counter is connected to
   port: /dev/ttyACM0
+  # The baudrate of the serial device. Default is 9600.
   #baudrate: 9600
   #parity:
   #stopbits:
@@ -109,41 +135,30 @@ serial:
   #timeout: None
   #connect_retry: 5
 
+# ##############
+# S0PCM Settings
+# ##############
 s0pcm:
+  # The MQTT publish interval. If not configured, it will publish on every S0PCM packet.
+  # This value shouldn't be configured lower then 10 seconds (default pulse counter interval).
+  # Default is to follow the S0PCM packet interval (10 seconds).
   #publish_interval: 10
+  # If only changes should be published. Default is yes.
   #publish_onchange: yes
-```
 
-Meassurements
--------------
-```
-date: 2018-11-15
-1:
-  #name: channel1
-  yesterday: 0
-  pulsecount: 2
-  today: 2
-  total: 370689
-2:
-  yesterday: 0
-  pulsecount: 0
-  today: 0
-  total: 0
-3:
-  yesterday: 0
-  pulsecount: 0
-  today: 0
-  total: 0
-4:
-  yesterday: 0
-  pulsecount: 0
-  today: 0
-  total: 0
-5:
-  yesterday: 0
-  pulsecount: 0
-  today: 0
-  total: 0
+  # If enabled, which input should be counted/used, all other ones are ignored.
+  # Default is all available inputs.
+  #include:
+  #  - 1
+  #  - 2
+
+  # If enabled, the daily counters will be written to a CSV file named "daily-<input>.txt"
+  # Default is disabled.
+  #dailystat:
+  #  - 1
+  #  - 2
+
+# End
 ```
 
 Volumes
