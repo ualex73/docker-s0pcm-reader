@@ -15,6 +15,15 @@ The conversion from m3 to liter is easy, because you can just multiple it by 100
 
 ![alt text](https://raw.githubusercontent.com/ualex73/docker-s0pcm-reader/master/screenshots/water-meter.png "Water meter")
 
+Initial Configuration
+---------------------
+
+To use the S0PCM-Reader you need to configure it, this can be done in 2 ways:
+- Start the S0PCM-Reader and the default configuration will be copied into the `/config` folder
+- Download the example `configuration.yaml` with the following command (we use `wget` for this) into your `/config` folder:
+
+`wget https://raw.githubusercontent.com/ualex73/docker-s0pcm-reader/master/app/configuration.yaml.example`
+
 Configure your initial meter reader
 -----------------------------------
 After you have downloaded and started the S0PCM-Reader, you need to configure your total pulse count to allow the S0PCM-Reader to relay the correct total count. Follow the following procedure:
