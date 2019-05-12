@@ -19,7 +19,7 @@ mqtt:
   # Port of the MQTT broker. Normally 1883 or 8883 (TLS)
   port: 1883
   # Basictopic to use to publish the values
-  basetopic: s0pcmreader
+  base_topic: s0pcmreader
   # Username and password required to connect to the MQTT broker
   #username: s0pcmreader
   #password: password
@@ -27,6 +27,8 @@ mqtt:
   #client_id: <random>
   # If messages should have the retain flag. Default it is yes.
   #retain: yes
+  # If values should be send per topic, or combine them into a json string as much as possible
+  #split_topic: yes
 
   # TLSv1/1.1/1.2 Configuration
   # Enable TLS, without a "tls_ca" it still connects, but no certificate verification is done.
@@ -61,6 +63,7 @@ s0pcm:
   # Default is to follow the S0PCM packet interval (10 seconds).
   #publish_interval: 10
   # If only changes should be published. Default is yes.
+  # NOTE: This is disabled when 'split_topic=no' is configured.
   #publish_onchange: yes
 
   # If enabled, which input should be counted/used, all other ones are ignored.

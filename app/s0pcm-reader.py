@@ -11,6 +11,7 @@ import paho.mqtt.client as mqtt
 import ssl
 import argparse
 import copy
+import json
 
 """
 Description
@@ -61,7 +62,7 @@ Rts/Cts: No
 
 MQTT
 ----
-MQTT Topic:
+MQTT Topic - when split_topic=yes (default):
 base_topic/status - online/offline
 base_topic/error - if any?
 base_topic/1/total
@@ -70,6 +71,12 @@ base_topic/1/yesterday
 base_topic/X/total
 base_topic/X/today
 base_topic/X/yesterday
+
+MQTT Topic - when split_topic=no:
+base_topic/status - online/offline
+base_topic/error - if any?
+base_topic/1 - json string e.g. '{"total": 12345, "today": 15, "yesterday": 77}'
+base_topic/X - json string e.g. '{"total": 12345, "today": 15, "yesterday": 77}'
 
 """
 
@@ -107,8 +114,9 @@ logname= configdirectory + 's0pcm-reader.log'
 # ------------------------------------------------------------------------------------
 # Logging
 # ------------------------------------------------------------------------------------
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
+logging.basicConfig(level=logging.ERROR, format='%(asctime)s %(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 logger.propagate = False
 
 # ------------------------------------------------------------------------------------
@@ -167,7 +175,11 @@ def ReadConfig():
     if not 'client_id' in config['mqtt']: config['mqtt']['client_id'] = None
     if not 'version' in config['mqtt']: config['mqtt']['version'] = mqtt.MQTTv311
     if not 'retain' in config['mqtt']: config['mqtt']['retain'] = True
+    if not 'split_topic' in config['mqtt']: config['mqtt']['split_topic'] = True
     if not 'connect_retry' in config['mqtt']: config['mqtt']['connect_retry'] = 5
+    if not 'online' in config['mqtt']: config['mqtt']['online'] = 'online'
+    if not 'offline' in config['mqtt']: config['mqtt']['offline'] = 'offline'
+    if not 'lastwill' in config['mqtt']: config['mqtt']['lastwill'] = 'offline'
 
     if str(config['mqtt']['version']) == '3.1':
       config['mqtt']['version'] = mqtt.MQTTv31
@@ -287,9 +299,11 @@ class TaskReadSerial(threading.Thread):
                     break
              
                 # check if there is data received
+                # If there is really nothing, most likely a timeout on reading the input data
                 if len(datain) == 0:
-                    logger.error('Failed to read data (nothing received)')
-                    continue
+                    logger.error('Failed to read any data (timeout)')
+                    ser.close()
+                    break
 
                 # need to decode the data to ascii string
                 try:
@@ -435,7 +449,7 @@ class TaskDoMQTT(threading.Thread):
         if rc == 0:
             self._connected = True
             logger.debug('MQTT successfully connected to broker')
-            self._mqttc.publish(config['mqtt']['base_topic'] + '/status', 'online', retain=config['mqtt']['retain'])
+            self._mqttc.publish(config['mqtt']['base_topic'] + '/status', config['mqtt']['online'], retain=config['mqtt']['retain'])
         else:
             self._connected = False
 
@@ -494,7 +508,7 @@ class TaskDoMQTT(threading.Thread):
             self._mqttc.tls_set_context(context=context)
 
         # Set last will
-        self._mqttc.will_set(config['mqtt']['base_topic'] + '/status', 'offline', retain=config['mqtt']['retain'])
+        self._mqttc.will_set(config['mqtt']['base_topic'] + '/status', config['mqtt']['lastwill'], retain=config['mqtt']['retain'])
 
         while not self._stopper.is_set():
 
@@ -537,6 +551,10 @@ class TaskDoMQTT(threading.Thread):
 
                 for key in measurementlocal:
                     if isinstance(key, int):
+
+                        # define dict for json value
+                        jsondata = {}
+
                         try:
                             if not measurement[key]['enabled']:
                                 continue
@@ -564,16 +582,31 @@ class TaskDoMQTT(threading.Thread):
 
                             try:
                                 if subkey in measurementlocal[key]:
-                                    # Check if the value not changed and publish on change is off
-                                    if measurementlocal[key][subkey] == value_previous and config['s0pcm']['publish_onchange'] == True:
-                                        continue
 
-                                    logger.debug('MQTT Publish of topic \'%s\' and value \'%s\'',config['mqtt']['base_topic'] + '/' + instancename + '/' + subkey,str(measurementlocal[key][subkey]))
+                                    if config['mqtt']['split_topic'] == True:
+                                        # Check if the value not changed and publish on change is off
+                                        if measurementlocal[key][subkey] == value_previous and config['s0pcm']['publish_onchange'] == True:
+                                            continue
 
-                                    # Do a MQTT Publish
-                                    self._mqttc.publish(config['mqtt']['base_topic'] + '/' + instancename + '/' + subkey, measurementlocal[key][subkey], retain=config['mqtt']['retain'])
+                                        logger.debug('MQTT Publish of topic \'%s\' and value \'%s\'',config['mqtt']['base_topic'] + '/' + instancename + '/' + subkey, str(measurementlocal[key][subkey]))
+
+                                        # Do a MQTT Publish
+                                        self._mqttc.publish(config['mqtt']['base_topic'] + '/' + instancename + '/' + subkey, measurementlocal[key][subkey], retain=config['mqtt']['retain'])
+                                    else:
+                                        jsondata[subkey] = measurementlocal[key][subkey]
+
                             except Exception as e:
                                 logger.error('MQTT Publish Failed. Key=%s, SubKey=%s. %s: \'%s\'', str(key), subkey, type(e).__name__, str(e))
+
+                        # We should publish the json value
+                        if config['mqtt']['split_topic'] == False:
+                            try:
+                                logger.debug('MQTT Publish of topic \'%s\' and value \'%s\'',config['mqtt']['base_topic'] + '/' + instancename, json.dumps(jsondata))
+
+                                # Do a MQTT Publish
+                                self._mqttc.publish(config['mqtt']['base_topic'] + '/' + instancename, json.dumps(jsondata), retain=config['mqtt']['retain'])
+                            except Exception as e:
+                                logger.error('MQTT Publish Failed. %s: \'%s\'', type(e).__name__, str(e))
 
                 # Lets make also a copy of this one, then we can compare if there is a delta
                 measurementprevious = copy.deepcopy(measurementlocal)
@@ -586,7 +619,7 @@ class TaskDoMQTT(threading.Thread):
 
             # Send an official offline message
             if self._connected:
-                self._mqttc.publish(config['mqtt']['base_topic'] + '/status', 'offline', retain=config['mqtt']['retain'])
+                self._mqttc.publish(config['mqtt']['base_topic'] + '/status', config['mqtt']['offline'], retain=config['mqtt']['retain'])
 
             self._mqttc.disconnect()
 
