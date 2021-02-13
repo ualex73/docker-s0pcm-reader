@@ -1,0 +1,21 @@
+image: ualex73/s0pcm-reader:latest
+manifests:
+  - image: ualex73/s0pcm-reader:amd64
+    platform:
+      architecture: amd64
+      os: linux
+  - image: ualex73/s0pcm-reader:arm32v6
+    platform:
+      architecture: arm
+      os: linux
+      variant: v6
+  - image: ualex73/s0pcm-reader:arm32v7
+    platform:
+      architecture: arm
+      os: linux
+      variant: v7
+  - image: ualex73/s0pcm-reader:arm64v8
+    platform:
+      architecture: arm64
+      os: linux
+      variant: v8
