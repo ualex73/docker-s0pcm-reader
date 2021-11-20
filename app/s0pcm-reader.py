@@ -421,7 +421,7 @@ class TaskReadSerial(threading.Thread):
                     self._trigger.set()
 
                 elif datastr == '':
-                    logger.warning('Empty Packer received, this can happen during start-up')
+                    logger.warning('Empty Packet received, this can happen during start-up')
                 else:
                     logger.error('Invalid Packet: \'%s\'', datastr)
 
